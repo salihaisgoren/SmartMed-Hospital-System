@@ -1,0 +1,112 @@
+.profil-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #f4f7f6;
+    padding: 20px;
+    position: relative;
+}
+
+.back-btn {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: none;
+    border: none;
+    color: #555;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: bold;
+}
+
+.back-btn:hover { color: #000; }
+
+.profil-card {
+    background: white;
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 500px;
+}
+
+.profil-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.profil-icon {
+    font-size: 4rem;
+    color: #008080;
+    margin-bottom: 10px;
+}
+
+.profil-header h2 { margin: 10px 0; color: #333; }
+.profil-header p { color: #777; font-size: 0.9rem; }
+
+.profil-form .form-group {
+    margin-bottom: 20px;
+}
+
+.profil-form label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #555;
+}
+
+.profil-form input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.3s;
+}
+
+.profil-form input:focus {
+    border-color: #008080;
+    outline: none;
+}
+
+.disabled-group input {
+    background-color: #e9ecef;
+    color: #6c757d;
+    cursor: not-allowed;
+}
+
+.save-btn {
+    width: 100%;
+    padding: 12px;
+    background-color: #008080;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    transition: background 0.3s;
+    margin-top: 10px;
+}
+
+.save-btn:hover { background-color: #006666; }
+
+.profil-msg {
+    margin-top: 15px;
+    text-align: center;
+    padding: 10px;
+    background-color: #d4edda;
+    color: #155724;
+    border-radius: 5px;
+    font-weight: bold;
+}

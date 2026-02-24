@@ -1,0 +1,18 @@
+# --- REACT (Frontend) ---
+Frontend/node_modules/
+Frontend/dist/
+Frontend/build/
+.env
+
+# --- C# .NET (Backend) ---
+Backend/**/bin/
+Backend/**/obj/
+Backend/.vs/
+*.user
+*.suo
+
+# --- PYTHON (AI Service) ---
+AI_Service/__pycache__/
+AI_Service/venv/
+AI_Service/.env
+*.pyc
