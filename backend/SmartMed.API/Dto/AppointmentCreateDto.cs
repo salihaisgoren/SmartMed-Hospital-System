@@ -8,5 +8,6 @@ namespace SmartMed.API.DTOs
         public int PatientId { get; set; }
         public DateTime AppointmentDate { get; set; }
         public string AppointmentTime { get; set; } = string.Empty;
+        public string? AiAnalysis { get; set; }
     }
 }

@@ -13,7 +13,6 @@ const Randevu = ({ onLogout, onMyApps, onProfile }) => {
     const [bolumlerListesi, setBolumlerListesi] = useState([]);
     const [doluSaatler, setDoluSaatler] = useState([]);
 
-    // --- VIP KONTROLÜ ---
     const userInfo = JSON.parse(localStorage.getItem("user_info") || "{}");
     const isVip = userInfo.isVip || false;
 
@@ -61,11 +60,10 @@ const Randevu = ({ onLogout, onMyApps, onProfile }) => {
 
     const mevcutDoktorlar = bolumlerListesi.find(b => b.name === bolum)?.doctors || [];
 
-    // --- SAATLERİ ÜRET ---
     const saatleriOlustur = () => {
         const saatler = [];
         for (let i = 9; i < 17; i++) {
-            if (i === 12) continue; // Öğle arası
+            if (i === 12) continue;
 
             for (let j = 0; j < 60; j += 15) {
                 const saatStr = `${i < 10 ? '0' + i : i}:${j === 0 ? '00' : j}`;
@@ -90,11 +88,11 @@ const Randevu = ({ onLogout, onMyApps, onProfile }) => {
             return;
         }
 
-        const fullDate = `${tarih}T${saat}:00`;
         const yeniRandevu = {
             doctorId: parseInt(doktorId),
             patientId: parseInt(hastaId),
-            appointmentDate: fullDate
+            appointmentDate: tarih,
+            appointmentTime: saat
         };
 
         try {
@@ -134,24 +132,21 @@ const Randevu = ({ onLogout, onMyApps, onProfile }) => {
             </div>
 
             <div className="r-card">
-                {/* 👇 YENİ YERİ: KARTIN İÇİNDE VE EN ÜSTTE 👇 */}
                 {isVip && (
                     <div style={{
                         backgroundColor: '#d4edda',
                         color: '#155724',
                         padding: '12px',
                         borderRadius: '8px',
-                        marginBottom: '20px', // Altındaki logolardan biraz uzaklaştırdık
+                        marginBottom: '20px',
                         textAlign: 'center',
                         border: '1px solid #c3e6cb',
                         fontWeight: 'bold',
-                        // maxWidth ve margin: auto'yu kaldırdık, kartın genişliğine uysun
                     }}>
                         🌟 65 Yaş Üstü Öncelikli Sistem Aktif! <br />
                         <span style={{ fontSize: '0.8rem' }}>Sabah 09:00 - 10:00 saatleri sadece size özeldir.</span>
                     </div>
                 )}
-                {/* 👆 ----------------------------------- 👆 */}
 
                 <img src={kalpIkon} alt="Kalp" className="r-decorative-icon r-left" />
                 <img src={stetoskopIkon} alt="Stetoskop" className="r-decorative-icon r-right" />
@@ -185,7 +180,20 @@ const Randevu = ({ onLogout, onMyApps, onProfile }) => {
 
                     <div className="r-form-group">
                         <label>Tarih:</label>
-                        <input type="date" value={tarih} onChange={(e) => setTarih(e.target.value)} min={new Date().toISOString().split("T")[0]} />
+                        <input
+                            type="date"
+                            value={tarih}
+                            onChange={(e) => {
+                                const selectedDate = new Date(e.target.value);
+                                if (selectedDate.getDay() === 0) {
+                                    alert("Hastanemiz Pazar günleri hizmet vermemektedir. Lütfen başka bir gün seçiniz.");
+                                    setTarih('');
+                                } else {
+                                    setTarih(e.target.value);
+                                }
+                            }}
+                            min={new Date().toISOString().split("T")[0]}
+                        />
                     </div>
 
                     <div className="r-form-group">
@@ -199,16 +207,17 @@ const Randevu = ({ onLogout, onMyApps, onProfile }) => {
                             {saatleriOlustur().map((s, i) => {
                                 const isDolu = doluSaatler.includes(s);
 
-                                // YENİ: Bu saat VIP saati mi? (09:00 - 09:45 arası)
+                                // 👇 DÜZELTME 3: React tarafındaki VIP 12 Saat Kuralı Eşitlemesi 👇
                                 const isVipSlot = parseInt(s.split(':')[0]) < 10 || s === '10:00';
 
-                                // YENİ: Saat VIP saatiyse ve Kullanıcı VIP DEĞİLSE kilitliyoruz
-                                const isVipRestricted = isVipSlot && !isVip;
+                                const randevuTarihSaat = new Date(`${tarih}T${s}:00`);
+                                const suAnkiTarihSaat = new Date();
+                                const kalanSaatFarki = (randevuTarihSaat - suAnkiTarihSaat) / (1000 * 60 * 60);
 
-                                // Saat doluysa VEYA Kullanıcıya yasaklıysa disabled yap
+                                const isVipRestricted = isVipSlot && !isVip && (kalanSaatFarki > 12);
+
                                 const isDisabled = isDolu || isVipRestricted;
 
-                                // Ekranda yazacak metni ayarlıyoruz
                                 let optionText = s;
                                 if (isDolu) optionText += ' (DOLU)';
                                 else if (isVipRestricted) optionText += ' (65+ Yaş Önceliği)';

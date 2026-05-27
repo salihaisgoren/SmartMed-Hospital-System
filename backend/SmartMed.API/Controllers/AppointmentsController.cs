@@ -5,6 +5,7 @@ using SmartMed.API.Data;
 using SmartMed.API.DTOs;
 using SmartMed.API.Models;
 using System.Security.Claims;
+using SmartMed.API.Services; // 👈 BÖLÜM 1: Bunu en üste ekle
 
 namespace SmartMed.API.Controllers
 {
@@ -13,10 +14,12 @@ namespace SmartMed.API.Controllers
     public class AppointmentsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly EmailService _emailService;
 
-        public AppointmentsController(ApplicationDbContext context)
+        public AppointmentsController(ApplicationDbContext context, EmailService emailService)
         {
             _context = context;
+            _emailService = emailService;
         }
 
         [HttpPost]
@@ -61,11 +64,59 @@ namespace SmartMed.API.Controllers
                 DoctorId = request.DoctorId,
                 PatientId = request.PatientId,
                 AppointmentDate = request.AppointmentDate.Date, // Sadece tarihi veritabanına ekle
-                AppointmentTime = talepEdilenSaat // Saati doğru bir şekilde "09:00" olarak ekle
+                AppointmentTime = talepEdilenSaat, // Saati doğru bir şekilde "09:00" olarak ekle
+                AiAnalysis = request.AiAnalysis, // 👈 YENİ: DTO'dan gelen metni modele aktar
+                Status = "Bekliyor" // Başlangıç durumu
             };
 
             _context.Appointments.Add(newAppointment);
             await _context.SaveChangesAsync();
+
+            // --- BÖLÜM 3: ANLIK ONAY MAİLİ GÖNDERİMİ ---
+            var patient = await _context.Users.FindAsync(request.PatientId);
+            var doctor = await _context.Doctors.Include(d => d.Specialty).FirstOrDefaultAsync(d => d.Id == request.DoctorId);
+
+            if (patient != null && !string.IsNullOrEmpty(patient.Email) && doctor != null)
+            {
+                string bolumAdi = doctor.Specialty != null ? doctor.Specialty.Name : "Poliklinik";
+                string konu = "✅ Randevunuz Başarıyla Oluşturuldu";
+
+                string mailIcerigi = $@"
+                    <div style='font-family: Arial, sans-serif; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 600px; margin: auto;'>
+                        <div style='text-align: center; border-bottom: 2px solid #10b981; padding-bottom: 15px; margin-bottom: 20px;'>
+                            <h2 style='color: #10b981; margin: 0;'>SmartMed Hastanesi</h2>
+                        </div>
+                        <h3 style='color: #0f172a;'>Randevu Onayı</h3>
+                        <p style='color: #334155; font-size: 16px;'>Sayın <strong>{patient.FullName}</strong>,</p>
+                        <p style='color: #475569; line-height: 1.6;'>Hastanemizden almış olduğunuz randevu işlemi başarıyla tamamlanmıştır. Detaylar aşağıdadır:</p>
+                        
+                        <table style='background-color: #f8fafc; padding: 15px; width: 100%; border-radius: 8px; margin-top:20px; border-left: 4px solid #10b981;'>
+                            <tr>
+                                <td style='width:100px; color: #64748b;'><strong>Tarih:</strong></td>
+                                <td style='color: #0f172a; font-weight: bold;'>{newAppointment.AppointmentDate:dd.MM.yyyy}</td>
+                            </tr>
+                            <tr>
+                                <td style='color: #64748b;'><strong>Saat:</strong></td>
+                                <td style='color: #0f172a; font-weight: bold;'>{newAppointment.AppointmentTime}</td>
+                            </tr>
+                            <tr>
+                                <td style='color: #64748b;'><strong>Bölüm:</strong></td>
+                                <td style='color: #0f172a; font-weight: bold;'>{bolumAdi}</td>
+                            </tr>
+                            <tr>
+                                <td style='color: #64748b;'><strong>Doktor:</strong></td>
+                                <td style='color: #0f172a; font-weight: bold;'>{doctor.FullName}</td>
+                            </tr>
+                        </table>
+
+                        <p style='margin-top: 25px; color: #475569; line-height: 1.6;'>Lütfen randevu saatinizden 15 dakika önce hastanemizde olunuz. Sağlıklı günler dileriz.</p>
+                        <hr style='border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;'>
+                        <small style='color: #94a3b8;'>SmartMed Hastane Yönetimi | Bu otomatik bir mesajdır.</small>
+                    </div>";
+
+                _emailService.SendEmail(patient.Email, konu, mailIcerigi);
+            }
+            // --------------------------------------------------
 
             return Ok(newAppointment);
         }
@@ -121,21 +172,23 @@ namespace SmartMed.API.Controllers
             // '&& a.PatientId != user.Id' diyerek doktorun bloklamak için aldığı sahte randevuları filtreledik.
 
             var totalAppointments = await _context.Appointments
-                .CountAsync(a => a.DoctorId == doctor.Id
-                              && a.AppointmentDate.Date == today
-                              && a.PatientId != user.Id); // <--- FİLTRE
+     .CountAsync(a => a.DoctorId == doctor.Id
+                   && a.AppointmentDate.Date == today
+                   && a.PatientId != user.Id);
 
+            // Bekleyen randevuları "Status" kelimesine göre say:
             var waiting = await _context.Appointments
                 .CountAsync(a => a.DoctorId == doctor.Id
                               && a.AppointmentDate.Date == today
-                              && a.AppointmentDate > DateTime.Now
-                              && a.PatientId != user.Id); // <--- FİLTRE
+                              && a.Status == "Bekliyor"
+                              && a.PatientId != user.Id);
 
+            // Tamamlanan randevuları "Status" kelimesine göre say:
             var completed = await _context.Appointments
                 .CountAsync(a => a.DoctorId == doctor.Id
                               && a.AppointmentDate.Date == today
-                              && a.AppointmentDate <= DateTime.Now
-                              && a.PatientId != user.Id); // <--- FİLTRE
+                              && a.Status == "Tamamlandı"
+                              && a.PatientId != user.Id);
 
             return Ok(new
             {
@@ -211,5 +264,59 @@ namespace SmartMed.API.Controllers
 
             return Ok(new { message = "Randevu başarıyla iptal edildi." });
         }
+
+        // --- YENİ EKLENECEK METOT (Muayene Et Butonu İçin) ---
+        [Authorize(Roles = "Doctor")]
+        [HttpPut("{id}/complete")]
+        public async Task<IActionResult> CompleteAppointment(int id)
+        {
+            var appointment = await _context.Appointments.FindAsync(id);
+            if (appointment == null) return NotFound();
+
+            appointment.Status = "Tamamlandı"; // Durumu güncelle
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Muayene başarıyla tamamlandı." });
+        }
+
+
+        [Authorize(Roles = "Doctor")]
+        [HttpGet("daily-appointments")]
+        public async Task<IActionResult> GetDailyAppointments()
+        {
+            // 1. Giriş yapan doktoru bul
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null) return Unauthorized();
+            int userId = int.Parse(userIdClaim.Value);
+
+            var user = await _context.Users.FindAsync(userId);
+            var doctor = await _context.Doctors.FirstOrDefaultAsync(d => d.FullName == user.FullName);
+            if (doctor == null) return BadRequest("Doktor profili bulunamadı.");
+
+            var today = DateTime.Today;
+
+            // 2. Sadece bu doktora ait, bugünkü ve GERÇEK (bloklanmamış) randevuları getir
+            var appointments = await _context.Appointments
+                .Include(a => a.Patient)
+                .Where(a => a.DoctorId == doctor.Id
+                            && a.AppointmentDate.Date == today
+                            && a.PatientId != user.Id) // Kendi blokladığı saatleri listede gösterme
+                .OrderBy(a => a.AppointmentTime)
+                .Select(a => new
+                {
+                    a.Id,
+                    a.AppointmentTime,
+                    PatientName = a.Patient != null ? a.Patient.FullName : "Bilinmeyen Hasta",
+                    // AI analizi yoksa null döner, React'ta buna göre işlem yapacağız
+                    AiSummary = a.AiAnalysis,
+                    // AI yoksa hastanın manuel şikayetini gösterelim
+                    ManualComplaint = a.PatientComplaint ?? "Şikayet belirtilmemiş",
+                    a.Status
+                })
+                .ToListAsync();
+
+            return Ok(appointments);
+        }
+
+
     }
 }

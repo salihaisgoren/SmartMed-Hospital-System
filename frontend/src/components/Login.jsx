@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import { FaEye, FaEyeSlash, FaArrowLeft } from 'react-icons/fa'; // YENİ: FaArrowLeft eklendi
 import './Login.css';
 import logoResmi from '../assets/hastane-logo.png';
 import sagGorsel from '../assets/doktor-gorsel.png';
 
-const Login = ({ onLogin, onGoToRegister, onGoToForgotPassword }) => {
+// YENİ: onGoToAssistant prop'u eklendi
+const Login = ({ onLogin, onGoToRegister, onGoToForgotPassword, onGoToAssistant }) => {
     const [tcNo, setTcNo] = useState("");
     const [sifre, setSifre] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [hataMesaji, setHataMesaji] = useState("");
 
-    // YENİ: Niyet Hafızası Modalı için State'ler
     const [bekleyenModal, setBekleyenModal] = useState({
         goster: false,
         randevu: null,
@@ -52,10 +52,8 @@ const Login = ({ onLogin, onGoToRegister, onGoToForgotPassword }) => {
                     isVip: data.isVip || false
                 }));
 
-                // 👇 YENİ: Başarılı girişten hemen sonra hafızayı kontrol ediyoruz 👇
                 const beklemedeStr = localStorage.getItem("bekleyenRandevu");
 
-                // Eğer hafızada randevu varsa ve giren kişi Hasta ise araya giriyoruz
                 if (beklemedeStr && data.role === "Patient") {
                     setBekleyenModal({
                         goster: true,
@@ -64,7 +62,6 @@ const Login = ({ onLogin, onGoToRegister, onGoToForgotPassword }) => {
                         role: data.role
                     });
                 } else {
-                    // Hafızada bir şey yoksa normal akışa devam et
                     onLogin(data.role);
                 }
 
@@ -79,12 +76,9 @@ const Login = ({ onLogin, onGoToRegister, onGoToForgotPassword }) => {
         }
     };
 
-    // 👇 YENİ: Randevuyu Onaylama Fonksiyonu 👇
-    // 👇 GÜNCELLENMİŞ: GERÇEK API İSTEĞİ YAPAN FONKSİYON 👇
     const handleRandevuOnayla = async () => {
         setIslemYapiliyor(true);
         try {
-            // 1. Giriş yapan kullanıcının ID'sini (PatientId) alıyoruz
             const userInfo = JSON.parse(localStorage.getItem("user_info"));
             const hastaId = userInfo?.id || userInfo?.userId;
 
@@ -93,23 +87,18 @@ const Login = ({ onLogin, onGoToRegister, onGoToForgotPassword }) => {
                 return;
             }
 
-            // 2. C# API'nin beklediği Randevu modelini oluşturuyoruz
             const yeniRandevu = {
                 DoctorId: bekleyenModal.randevu.doktorId,
                 PatientId: hastaId,
-                // JavaScript saati geriye atmasın diye metni direkt "T" harfinden bölüyoruz
                 AppointmentDate: bekleyenModal.randevu.tarih.split('T')[0],
-                AppointmentTime: bekleyenModal.randevu.saat
+                AppointmentTime: bekleyenModal.randevu.saat,
+                AiAnalysis: bekleyenModal.randevu.sikayet
             };
 
-            // 3. C# API'ye (Veritabanına Kaydetmesi İçin) POST isteği atıyoruz
-            // NOT: Kendi Randevu ekleme (POST) endpoint'ini buraya yazmalısın!
-            // Örneğin: "https://localhost:7092/api/Appointments" veya "api/Randevu"
             const response = await fetch("https://localhost:7092/api/Appointments", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    // Eğer API'n yetkilendirme (Authorize) istiyorsa token'ı da gönderiyoruz:
                     "Authorization": `Bearer ${userInfo.token}`
                 },
                 body: JSON.stringify(yeniRandevu)
@@ -117,8 +106,8 @@ const Login = ({ onLogin, onGoToRegister, onGoToForgotPassword }) => {
 
             if (response.ok) {
                 alert(`${bekleyenModal.randevu.doktorAdi} için randevunuz başarıyla oluşturuldu!`);
-                localStorage.removeItem("bekleyenRandevu"); // İşlem bitti, hafızayı temizle
-                onLogin(bekleyenModal.role); // Hastayı paneline yönlendir
+                localStorage.removeItem("bekleyenRandevu");
+                onLogin(bekleyenModal.role);
             } else {
                 const errorText = await response.text();
                 alert("Randevu oluşturulamadı: " + errorText);
@@ -132,7 +121,6 @@ const Login = ({ onLogin, onGoToRegister, onGoToForgotPassword }) => {
         }
     };
 
-    // 👇 YENİ: Randevuyu İptal Etme Fonksiyonu 👇
     const handleRandevuIptal = () => {
         localStorage.removeItem("bekleyenRandevu");
         onLogin(bekleyenModal.role);
@@ -140,12 +128,36 @@ const Login = ({ onLogin, onGoToRegister, onGoToForgotPassword }) => {
 
     return (
         <div className="login-container" style={{ position: 'relative' }}>
-            <div className="login-left">
+            <div className="login-left" style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+
+                {/* 👇 YENİ: Düzenlenmiş ve Hizalanmış Akıllı Asistana Dön Butonu 👇 */}
+                {onGoToAssistant && (
+                    <div style={{ width: '100%', maxWidth: '400px', marginBottom: '15px' }}>
+                        <span
+                            onClick={onGoToAssistant}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                color: '#0097A7',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                fontSize: '0.95rem',
+                                transition: 'color 0.2s ease-in-out'
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.color = '#007b8a'}
+                            onMouseOut={(e) => e.currentTarget.style.color = '#0097A7'}
+                        >
+                            <FaArrowLeft /> Akıllı Asistana Dön
+                        </span>
+                    </div>
+                )}
+                {/* 👆 -------------------------------- 👆 */}
+
                 <img src={logoResmi} alt="Logo" className="hospital-logo" />
                 <h2 className="welcome-text">Hastane Randevu Sistemine<br/>Hoş Geldiniz!</h2>
 
                 <form onSubmit={handleGiris} style={{width:'100%', maxWidth:'400px'}}>
-
                     <div className="form-group">
                         <label>TC Kimlik Numarası</label>
                         <input
@@ -208,7 +220,6 @@ const Login = ({ onLogin, onGoToRegister, onGoToForgotPassword }) => {
                 <img src={sagGorsel} alt="Görsel" className="illustration-image" />
             </div>
 
-            {/* 👇 YENİ: SİHİRLİ NİYET YAKALAMA MODALI 👇 */}
             {bekleyenModal.goster && (
                 <div style={{
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -222,7 +233,6 @@ const Login = ({ onLogin, onGoToRegister, onGoToForgotPassword }) => {
                     }}>
                         <div style={{ fontSize: '40px', marginBottom: '10px' }}>🎉</div>
 
-                        {/* İsmin sadece ilk kelimesini alıyoruz (Örn: Saliha İşgören -> Saliha) */}
                         <h2 style={{ color: '#0097A7', marginBottom: '15px', fontWeight: 'bold' }}>
                             Hoş Geldin, {bekleyenModal.kullaniciAdi.split(' ')[0]}!
                         </h2>

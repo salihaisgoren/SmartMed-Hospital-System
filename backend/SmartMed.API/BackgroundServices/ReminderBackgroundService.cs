@@ -18,7 +18,7 @@ namespace SmartMed.API.BackgroundServices
             // 👇 AYARLAR 👇
             // false = Sadece hedef saatte (00:00) çalışır.
             // true yaparsan saati beklemez, hemen atar.
-            bool TEST_MODU = false;
+            bool TEST_MODU = true;
 
             // Hedef: Gece 00:00 (Günün ilk dakikası)
             int hedefSaat = 0;
@@ -90,7 +90,7 @@ namespace SmartMed.API.BackgroundServices
                                 
                                 <div style='background-color: #fff; padding: 15px; border-left: 5px solid #3498db; margin: 20px 0;'>
                                     <p><strong>📅 Tarih:</strong> {app.AppointmentDate:dd.MM.yyyy}</p>
-                                    <p><strong>⏰ Saat:</strong> {app.AppointmentDate:HH:mm}</p>
+                                    <p><strong>⏰ Saat:</strong> {app.AppointmentTime}</p>
                                     <p><strong>👨‍⚕️ Doktor:</strong> {app.Doctor.FullName}</p>
                                     <p><strong>🏥 Bölüm:</strong> {bolumAdi}</p>
                                 </div>

@@ -1,63 +1,51 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.pipeline import make_pipeline
+from sklearn.svm import SVC
+from sentence_transformers import SentenceTransformer
 
 app = Flask(__name__)
-CORS(app)  # React'ten gelen isteklere izin ver
+CORS(app)
 
-# --- MODELİ EĞİT ---
-print("Yapay Zeka Modeli Eğitiliyor... Lütfen Bekleyiniz 🤖")
+# --- 1. MODELİ YÜKLE VE EĞİT ---
+print("Derin Öğrenme Modeli İndiriliyor/Yükleniyor (İlk seferde biraz sürebilir)... Lütfen Bekleyiniz 🤖")
 
 try:
+    # Cümlelerin 'anlamını' ve 'bağlamını' kavrayan çok dilli (Türkçe destekli) model
+    embedder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+
+    # Veri setini oku
     data = pd.read_csv('veri.csv')
-    X = data['Sikayet']
+
+    print("Cümleler Vektörlere (Matematiksel Anlama) Çevriliyor...")
+    X_embeddings = embedder.encode(data['Sikayet'].tolist())
     y = data['Bolum']
-    
-    # Kelimeleri matematiğe çevir (TF-IDF) ve Sınıflandır (Naive Bayes)
-    model = make_pipeline(TfidfVectorizer(), MultinomialNB())
-    model.fit(X, y)
-    print("Model Hazır! 🚀")
+
+    # Sınıflandırıcı (SVM) ile vektörleri bölümlere ayırmayı öğren
+    classifier = SVC(probability=True, kernel='linear')
+    classifier.fit(X_embeddings, y)
+
+    print("Derin Öğrenme Modeli Hazır! 🚀")
 except Exception as e:
     print(f"HATA: Model eğitilemedi. {e}")
 
-# --- API UÇ NOKTASI ---
+
+# --- 2. API UÇ NOKTASI ---
 @app.route('/tahmin-et', methods=['POST'])
 def tahmin_et():
     gelen_veri = request.get_json()
-    sikayet_cumlesi = gelen_veri.get('sikayet', '').lower() # Küçük harfe çevirdik
+    ham_sikayet = gelen_veri.get('sikayet', '')
 
-    if not sikayet_cumlesi:
+    if not ham_sikayet:
         return jsonify({'error': 'Lütfen şikayetinizi yazın.'}), 400
 
-    # --- KRİTİK KELİME FİLTRESİ (Yapay zekadan önce burası çalışır) ---
-    tahmin = None
-    
-    if "bulantı" in sikayet_cumlesi or "mide" in sikayet_cumlesi or "kusma" in sikayet_cumlesi:
-        tahmin = "Dahiliye"
-    elif "idrar" in sikayet_cumlesi or "böbrek" in sikayet_cumlesi:
-        tahmin = "Üroloji"
-    elif "stres" in sikayet_cumlesi or "depresyon" in sikayet_cumlesi or "kaygı" in sikayet_cumlesi:
-        tahmin = "Psikiyatri"
-    elif "diş" in sikayet_cumlesi or "damak" in sikayet_cumlesi:
-        tahmin = "Diş Hekimliği"
-    elif "gebe" in sikayet_cumlesi or "hamile" in sikayet_cumlesi or "adet" in sikayet_cumlesi:
-        tahmin = "Kadın Doğum"
-    elif "göz" in sikayet_cumlesi or "görme" in sikayet_cumlesi:
-        tahmin = "Göz Hastalıkları"
-    
-    # Eğer yukarıdaki anahtar kelimeler yoksa yapay zekaya sor
-    if tahmin is None:
-        tahmin = model.predict([sikayet_cumlesi])[0]
+    # 1. Hastanın şikayetini doğrudan modele ver (Ön işlemeye veya sözlüğe gerek yok!)
+    sikayet_vector = embedder.encode([ham_sikayet])
 
-    # Güven Oranı (Filtreye takıldıysa %100, takılmadıysa modelden al)
-    if "tahmin" in locals() and any(k in sikayet_cumlesi for k in ["idrar", "stres", "diş", "gebe", "göz"]):
-        guven_orani = 100.0
-    else:
-        olasilik = model.predict_proba([sikayet_cumlesi])[0]
-        guven_orani = max(olasilik) * 100
+    # 2. Tahmin yap ve Güven Oranını hesapla
+    tahmin = classifier.predict(sikayet_vector)[0]
+    olasiliklar = classifier.predict_proba(sikayet_vector)[0]
+    guven_orani = max(olasiliklar) * 100
 
     return jsonify({
         'bolum': tahmin,
@@ -65,6 +53,6 @@ def tahmin_et():
         'mesaj': f"Önerilen Bölüm: {tahmin}"
     })
 
+
 if __name__ == '__main__':
-    # 5000 portunda çalıştır
     app.run(debug=True, port=5000)

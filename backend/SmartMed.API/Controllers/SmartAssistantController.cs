@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartMed.API.Data;
-using SmartMed.API.DTOs; // DTO'yu buraya using ile ekliyoruz
+using SmartMed.API.DTOs;
 using SmartMed.API.Models;
 
 namespace SmartMed.API.Controllers
@@ -10,7 +10,7 @@ namespace SmartMed.API.Controllers
     [ApiController]
     public class SmartAssistantController : ControllerBase
     {
-        private readonly ApplicationDbContext _context; // Kendi DbContext adını buraya yaz (örn: SmartMedDbContext)
+        private readonly ApplicationDbContext _context;
 
         public SmartAssistantController(ApplicationDbContext context)
         {
@@ -20,16 +20,12 @@ namespace SmartMed.API.Controllers
         [HttpGet("suggestions/by-name/{specialtyName}")]
         public async Task<ActionResult<List<SmartDoctorSuggestionDto>>> GetSmartSuggestionsByNameAsync(string specialtyName)
         {
-            // 1. ÖNEMLİ DEĞİŞİKLİK: Önce Python'dan gelen isme göre bölümü veritabanından bul.
-            // (Büyük/küçük harf sorunu olmasın diye ikisini de ToLower() yapıyoruz)
             var specialty = await _context.Specialties
                 .FirstOrDefaultAsync(s => s.Name.ToLower() == specialtyName.ToLower());
 
-            // Eğer veritabanında böyle bir bölüm yoksa, boş liste dön (Sistem çökmez)
             if (specialty == null)
                 return Ok(new List<SmartDoctorSuggestionDto>());
 
-            // 2. Bölümü bulduk! Şimdi o bölümün ID'sine sahip doktorları çek
             var doctors = await _context.Doctors
                 .Where(d => d.SpecialtyId == specialty.Id)
                 .ToListAsync();
@@ -50,9 +46,10 @@ namespace SmartMed.API.Controllers
 
             var suggestions = new List<SmartDoctorSuggestionDto>();
 
+            // 👇 DÜZELTME 1: 15'er dakikalık tam saat listesi 👇
             var standardTimes = new List<string> {
-                "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-                "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"
+                "09:00", "09:15", "09:30", "09:45", "10:00", "10:15", "10:30", "10:45", "11:00", "11:15", "11:30", "11:45",
+                "13:00", "13:15", "13:30", "13:45", "14:00", "14:15", "14:30", "14:45", "15:00", "15:15", "15:30", "15:45", "16:00"
             };
 
             foreach (var doctor in doctors)
@@ -78,31 +75,28 @@ namespace SmartMed.API.Controllers
                     var availableTime = standardTimes.FirstOrDefault(t => {
                         bool isBooked = bookedTimesOnDay.Contains(t);
                         bool isPassed = false;
-                        bool isReservedFor65Plus = false; // YENİ: 65 Yaş ve Kilit Kontrolü
+                        bool isReservedFor65Plus = false;
 
                         TimeSpan slotTime = TimeSpan.Parse(t);
-                        DateTime exactSlotDateTime = checkDate.Date.Add(slotTime); // Randevunun tam tarih ve saati
+                        DateTime exactSlotDateTime = checkDate.Date.Add(slotTime);
 
-                        // Geçmiş saat kontrolü (Bugün için)
                         if (i == 0)
                         {
                             isPassed = slotTime <= currentTime.Add(TimeSpan.FromHours(1));
                         }
 
-                        // YENİ: 09:00 ve 09:30 saatleri için özel iş kuralı (Dinamik Kilit)
-                        if (t == "09:00" || t == "09:30")
+                        // 👇 DÜZELTME 2: Tüm sabah saatleri için VIP 12 Saat Kuralı 👇
+                        int saatDegeri = int.Parse(t.Split(':')[0]);
+                        if (saatDegeri < 10 || t == "10:00")
                         {
                             TimeSpan timeUntilAppointment = exactSlotDateTime - DateTime.Now;
 
-                            // Eğer randevuya 12 saatten FAZLA varsa, yaşını bilmediğimiz anonim kullanıcıya KİLİTLE.
                             if (timeUntilAppointment.TotalHours > 12)
                             {
                                 isReservedFor65Plus = true;
                             }
-                            // Not: 12 saat veya daha az kalmışsa 'isReservedFor65Plus' false kalır, yani herkese açılır.
                         }
 
-                        // Sonuç: Dolu değilse, saati geçmemişse ve 65 yaş kilit kuralına takılmıyorsa öner!
                         return !isBooked && !isPassed && !isReservedFor65Plus;
                     });
 
@@ -134,6 +128,5 @@ namespace SmartMed.API.Controllers
 
             return Ok(result);
         }
-
     }
 }
